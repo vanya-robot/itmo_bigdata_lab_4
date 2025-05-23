@@ -6,6 +6,8 @@ from src.db.database import get_db
 from src.db.crud import save_prediction
 from sqlalchemy.orm import Session
 from pathlib import Path
+from kafka.producer import send_prediction
+from datetime import datetime
 import logging
 import time
 import joblib
@@ -64,6 +66,11 @@ async def predict(
         logger.info("Saving prediction to database")
         save_prediction(db, features, prediction[0])
         logger.info("Prediction saved successfully")
+
+        send_prediction({
+        "features": features.dict(),
+        "prediction": prediction[0],
+        "timestamp": datetime.utcnow().isoformat()})
         
         return {"species": prediction[0]}
     

@@ -27,6 +27,18 @@ def load_config_to_dict(config_path: str) -> Dict[str, Any]:
     
     return result
 
+def get_kafka_brokers(self):
+    secret = self.get_vault_secret("kafka")
+    return secret['data']['data']['bootstrap_servers']
+
+def get_kafka_username(self):
+    secret = self.get_vault_secret("kafka")
+    return secret['data']['data']['username']
+
+def get_kafka_password(self):
+    secret = self.get_vault_secret("kafka")
+    return secret['data']['data']['password']
+
 class Settings(BaseSettings):
     vault_addr: str = "http://vault:8200"
     vault_token: str = "root"

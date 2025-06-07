@@ -24,7 +24,7 @@ jobs:
         
     - name: Create deploy info
       run: |
-        echo "Image: $DOCKERHUB_USERNAME/penguin-classifier-withdb-secret" > docker-image-info.txt
+        echo "Image: $DOCKERHUB_USERNAME/penguin-classifier-withdb-secret-kafka" > docker-image-info.txt
         echo "Version: $(git describe --tags --always || echo 'latest')" >> docker-image-info.txt
         echo "Timestamp: $(date +%Y%m%d%H%M%S)" >> docker-image-info.txt
         

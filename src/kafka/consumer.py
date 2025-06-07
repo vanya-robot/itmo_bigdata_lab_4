@@ -27,7 +27,6 @@ def consume_predictions():
             
             prediction = json.loads(msg.value().decode('utf-8'))
             print(f"Received prediction: {prediction}")
-            # Здесь можно добавить логику обработки сообщения
             
     except KeyboardInterrupt:
         pass

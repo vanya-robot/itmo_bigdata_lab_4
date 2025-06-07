@@ -2,12 +2,9 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from src.model import PenguinClassifier
 from src.api.schemas import PenguinFeatures
 from src.exceptions import ModelLoadError, PredictionError
-from src.db.database import get_db
-from src.db.crud import save_prediction
+from src.db.database import db
 from sqlalchemy.orm import Session
 from pathlib import Path
-from kafka.producer import send_prediction
-from datetime import datetime
 import logging
 import time
 import joblib
@@ -55,22 +52,15 @@ except Exception as e:
 @app.post("/predict")
 async def predict(
     features: PenguinFeatures,
-    db: Session = Depends(get_db)
+    db_session: Session = Depends(db.get_db)  # Используем метод из класса
 ):
     try:
         logger.info(f"Prediction request: {features}")
         prediction = model.predict(features)
         logger.info(f"Prediction result: {prediction[0]}")
         
-        # Сохраняем предсказание в БД
-        logger.info("Saving prediction to database")
-        save_prediction(db, features, prediction[0])
-        logger.info("Prediction saved successfully")
-
-        send_prediction({
-        "features": features.dict(),
-        "prediction": prediction[0],
-        "timestamp": datetime.utcnow().isoformat()})
+        # Сохраняем предсказание
+        db.save_prediction(db_session, features, prediction[0])
         
         return {"species": prediction[0]}
     

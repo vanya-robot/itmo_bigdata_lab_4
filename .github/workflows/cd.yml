@@ -8,6 +8,7 @@ on:
 
 jobs:
   deploy:
+    environment: itmo_bigdata_labs
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:

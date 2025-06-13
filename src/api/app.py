@@ -3,13 +3,15 @@ from src.model import PenguinClassifier
 from src.api.schemas import PenguinFeatures
 from src.exceptions import ModelLoadError, PredictionError
 from src.db.database import db
-from src.kafka.producer import send_prediction
+from src.kafka.producer import kafka_producer
+from src.kafka.consumer import kafka_consumer
 from sqlalchemy.orm import Session
 from pathlib import Path
 import logging
 import time
 import joblib
 import threading
+import traceback
 
 LOG_DIR = Path("logs/")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,13 +31,13 @@ app = FastAPI(title="Penguin Species Classifier API")
 
 @app.on_event("startup")
 def startup_event():
-    # Запускаем consumer в отдельном процессе
-    import multiprocessing
-    from src.kafka.consumer import start_consumer
+    import threading
+    def run_consumer():
+        kafka_consumer.start_consuming()
     
-    process = multiprocessing.Process(target=start_consumer, daemon=True)
-    process.start()
-    logger.info("Kafka consumer started in background process")
+    consumer_thread = threading.Thread(target=run_consumer, daemon=True)
+    consumer_thread.start()
+    logger.info("Kafka consumer started in background")
 
 # Логирование запросов
 @app.middleware("http")
@@ -65,7 +67,13 @@ except Exception as e:
 async def predict(
     features: PenguinFeatures,
     db_session: Session = Depends(db.get_db)
-):
+    ):
+
+    context = {
+        "endpoint": "/predict",
+        "features": features.dict()
+    }
+
     try:
         logger.info(f"Prediction request: {features}")
         prediction = model.predict(features)
@@ -75,23 +83,22 @@ async def predict(
         db_prediction = db.save_prediction(db_session, features, prediction[0])
         
         # Отправляем предсказание в Kafka
-        prediction_data = {
-            **features.dict(),
-            "predicted_species": prediction[0],
-            "timestamp": db_prediction.created_at.isoformat()
-        }
-        send_prediction(prediction_data)
+
+        kafka_producer.send_prediction(features.dict(), prediction[0])
         
         return {"species": prediction[0]}
     
     except ValueError as e:
         logger.error(f"Invalid input: {str(e)}", exc_info=True)
+        kafka_producer.send_validation_error(str(e), features.dict())
         raise HTTPException(status_code=422, detail=str(e))
     except PredictionError as e:
         logger.error(f"Prediction failed: {str(e)}", exc_info=True)
+        kafka_producer.send_processing_error(str(e), context)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected prediction error: {str(e)}", exc_info=True)
+        logger.critical(f"Unexpected error: {traceback.format_exc()}")
+        kafka_producer.send_processing_error(str(e), context)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/health")

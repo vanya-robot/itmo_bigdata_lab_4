@@ -10,3 +10,4 @@ pytest
 pydantic-settings
 hvac>=2.0.0
 setuptools
+confluent_kafka

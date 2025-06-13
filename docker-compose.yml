@@ -1,61 +1,73 @@
-volumes:
-  postgres_data:
-  vault_data:
-
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
   vault:
     image: vault:1.13.0
     ports:
       - "8200:8200"
     environment:
-      VAULT_DEV_ROOT_TOKEN_ID: "root"
+      VAULT_DEV_ROOT_TOKEN: root
       VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
     volumes:
       - vault_data:/vault/data
+      - ./vault-init.sh:/vault-init.sh
     cap_add:
       - IPC_LOCK
+    command: ./vault-init.sh
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8200/v1/sys/health"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  vault-init:
-    image: vault:1.13.0
-    depends_on:
-      vault:
-        condition: service_healthy
-    volumes:
-      - ./src/scripts:/scripts
-    entrypoint: sh -c "
-      vault login root &&
-      sh /scripts/init_vault.sh"
-    environment:
-      VAULT_ADDR: "http://vault:8200"
-      VAULT_TOKEN: "root"
-
   db:
     image: postgres:13
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     depends_on:
-      vault-init:
-        condition: service_completed_successfully
+      - vault
+    volumes:
+      - postgres_data:/var/lib/postgresql_4/data
     environment:
-      POSTGRES_USER: "penguin_user"
-      POSTGRES_PASSWORD: "123321"
-      POSTGRES_DB: "penguin_db"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      VAULT_TOKEN: ${VAULT_ROOT_TOKEN}
 
   penguin-api:
     build: .
     ports:
       - "8000:8000"
     depends_on:
-      db:
-        condition: service_started
+      - db
+      - vault
+      - kafka
     environment:
       VAULT_ADDR: "http://vault:8200"
-      VAULT_TOKEN: "root"
-    command: sh -c "/app/scripts/get_secrets.sh && python src/scripts/init_db.py && uvicorn src.api.app:app --host 0.0.0.0 --port 8000"
+      VAULT_TOKEN: ${VAULT_ROOT_TOKEN}
+      KAFKA_TOPIC: "predictions"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  vault_data:

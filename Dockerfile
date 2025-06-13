@@ -16,14 +16,11 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
 COPY --from=builder /app /app
 
-# Устанавливаем Vault CLI и зависимости
-RUN apt-get update && apt-get install -y curl unzip jq && \
-    curl -O https://releases.hashicorp.com/vault/1.13.0/vault_1.13.0_linux_amd64.zip && \
-    unzip vault_1.13.0_linux_amd64.zip -d /usr/local/bin && \
-    chmod +x /usr/local/bin/vault && \
-    rm vault_1.13.0_linux_amd64.zip
+# Устанавливаем только jq для обработки JSON
+RUN apt-get update && apt-get install -y jq && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN chmod +x /app/src/scripts/get_secrets.sh
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-CMD ["sh", "-c", \
-     "/app/src/scripts/get_secrets.sh && python src/scripts/init_db.py && uvicorn src.api.app:app --host 0.0.0.0 --port 8000"]
+CMD ["/entrypoint.sh"]

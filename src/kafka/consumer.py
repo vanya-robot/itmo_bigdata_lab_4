@@ -1,37 +1,28 @@
 from confluent_kafka import Consumer
-import json
-import os
 from src.config import settings
+import logging
 
-conf = {
-    'bootstrap.servers': settings.get_kafka_brokers(),
-    'security.protocol': settings.get_kafka_security_protocol(),
-    'sasl.mechanisms': 'PLAIN',
-    'sasl.username': settings.get_kafka_username(),
-    'sasl.password': settings.get_kafka_password()
-}
+logger = logging.getLogger("kafka-consumer")
 
-consumer = Consumer(conf)
-topic = os.getenv('KAFKA_TOPIC')
-consumer.subscribe([topic])
-
-def consume_predictions():
+def start_consumer():
+    consumer = Consumer({
+        'bootstrap.servers': settings.kafka_bootstrap_servers,
+        'group.id': 'penguin-api',
+        'auto.offset.reset': 'earliest'
+    })
+    
+    consumer.subscribe([settings.kafka_topic])
+    
     try:
         while True:
             msg = consumer.poll(1.0)
             if msg is None:
                 continue
             if msg.error():
-                print(f"Consumer error: {msg.error()}")
+                logger.error(f"Consumer error: {msg.error()}")
                 continue
             
-            prediction = json.loads(msg.value().decode('utf-8'))
-            print(f"Received prediction: {prediction}")
+            logger.info(f"Received: {msg.value().decode('utf-8')}")
             
-    except KeyboardInterrupt:
-        pass
     finally:
         consumer.close()
-
-if __name__ == '__main__':
-    consume_predictions()

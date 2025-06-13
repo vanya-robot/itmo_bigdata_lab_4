@@ -14,5 +14,8 @@ vault kv put secret/postgres \
   port=${POSTGRES_PORT:-5432} \
   host=${POSTGRES_HOST:-db}
 
+vault kv put secret/kafka \
+  bootstrap_servers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092} \
+
 echo "Vault initialization complete!"
 tail -f /vault/logs/vault.log  # Чтобы контейнер не завершался

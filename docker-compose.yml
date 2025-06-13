@@ -11,25 +11,10 @@ services:
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-
-  kafka-producer:
-    build: .
-    command: python src/kafka/producer.py
-    depends_on:
-      - kafka
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
-      KAFKA_TOPIC: "predictions"
-
-  kafka-consumer:
-    build: .
-    command: python src/kafka/consumer.py
-    depends_on:
-      - kafka
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
-      KAFKA_TOPIC: "predictions"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
 
   vault:
     image: vault:1.13.0
@@ -71,9 +56,17 @@ services:
     depends_on:
       - db
       - vault
+      - kafka
     environment:
       VAULT_ADDR: "http://vault:8200"
       VAULT_TOKEN: ${VAULT_ROOT_TOKEN}
+      KAFKA_TOPIC: "predictions"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:

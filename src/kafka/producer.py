@@ -1,32 +1,24 @@
 from confluent_kafka import Producer
-import json
-import os
 from src.config import settings
+import json
+import logging
 
-conf = {
-    'bootstrap.servers': settings.get_kafka_brokers(),
-    'security.protocol': settings.get_kafka_security_protocol(),
-    'sasl.mechanisms': 'PLAIN',
-    'sasl.username': settings.get_kafka_username(),
-    'sasl.password': settings.get_kafka_password()
-}
+logger = logging.getLogger("kafka-producer")
 
-producer = Producer(conf)
-topic = os.getenv('KAFKA_TOPIC')
+producer = Producer({
+    'bootstrap.servers': settings.kafka_bootstrap_servers
+})
 
-def delivery_report(err, msg):
-    if err:
-        print(f'Message delivery failed: {err}')
-    else:
-        print(f'Message delivered to {msg.topic()}')
-
-def send_prediction(prediction_data):
+def send_prediction(prediction_data: dict):
     try:
         producer.produce(
-            topic=topic,
+            topic=settings.kafka_topic,
             value=json.dumps(prediction_data).encode('utf-8'),
-            callback=delivery_report
-        )
-        producer.flush()
+            callback=lambda err, msg: (
+                logger.error(f'Delivery failed: {err}') if err else
+                logger.info(f'Delivered to {msg.topic()}')
+        ))
+        producer.poll(0)
     except Exception as e:
-        print(f"Failed to send message: {e}")
+        logger.error(f"Send error: {e}", exc_info=True)
+        raise

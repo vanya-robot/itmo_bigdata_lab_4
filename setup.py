@@ -19,7 +19,8 @@ setup(
         'sqlalchemy>=1.4',
         'psycopg2-binary>=2.9',
         'alembic>=1.7',
-        'pydantic-settings'
+        'pydantic-settings',
+        'confluent_kafka'
     ],
     extras_require={
         'dev': [
